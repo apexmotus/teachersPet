@@ -12,14 +12,16 @@ import {
   Users,
   LogOut,
   UserCircle,
+  School,
 } from 'lucide-react'
 
 const NAV = [
-  { href: '/dashboard',     label: 'Dashboard',     icon: LayoutDashboard },
-  { href: '/attendance',    label: 'Class Register', icon: ClipboardList },
-  { href: '/announcements', label: 'Announcements',  icon: Megaphone },
-  { href: '/lesson-plans',  label: 'Lesson Plans',   icon: BookOpen },
-  { href: '/learners',      label: 'Learners',       icon: Users },
+  { href: '/dashboard',     label: 'Dashboard',     icon: LayoutDashboard, roles: null },
+  { href: '/attendance',    label: 'Class Register', icon: ClipboardList,   roles: null },
+  { href: '/announcements', label: 'Announcements',  icon: Megaphone,       roles: null },
+  { href: '/lesson-plans',  label: 'Lesson Plans',   icon: BookOpen,        roles: null },
+  { href: '/learners',      label: 'Learners',       icon: Users,           roles: null },
+  { href: '/classes',       label: 'Classes',        icon: School,          roles: ['dh','dp','principal'] },
 ]
 
 const ROLE_LABELS: Record<string, string> = {
@@ -67,7 +69,7 @@ export function Sidebar({ profile }: { profile: Profile }) {
 
       {/* Nav */}
       <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
-        {NAV.map(({ href, label, icon: Icon }) => {
+        {NAV.filter(({ roles }) => !roles || roles.includes(profile.role)).map(({ href, label, icon: Icon }) => {
           const active = pathname === href
           return (
             <Link
