@@ -249,6 +249,7 @@ export interface Database {
           memo_url: string | null
           status: LessonPlanStatus
           created_at: string
+          updated_at: string | null
         }
         Insert: {
           id?: string
@@ -264,6 +265,7 @@ export interface Database {
           memo_url?: string | null
           status?: LessonPlanStatus
           created_at?: string
+          updated_at?: string | null
         }
         Update: Partial<Database['public']['Tables']['lesson_plans']['Insert']>
         Relationships: []

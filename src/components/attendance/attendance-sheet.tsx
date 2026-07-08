@@ -5,10 +5,13 @@ import { createClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Input } from '@/components/ui/input'
+import { saveAttendance } from '@/app/actions/attendance'
 import type { Class, Learner, AttendanceStatus } from '@/lib/types/database'
-import { CheckCircle, XCircle, Clock, Save } from 'lucide-react'
+import { CheckCircle, XCircle, Clock, Save, MessageSquare } from 'lucide-react'
 
 type AttendanceMap = Record<string, AttendanceStatus>
+type NotesMap = Record<string, string>
 
 const STATUS_OPTIONS: { value: AttendanceStatus; label: string; icon: React.ReactNode; color: string }[] = [
   { value: 'present', label: 'P', icon: <CheckCircle className="w-4 h-4" />, color: 'bg-green-500 hover:bg-green-600 text-white' },
@@ -25,59 +28,83 @@ export function AttendanceSheet({
   teacherId: string
   schoolId: string
 }) {
-  const [selectedClass, setSelectedClass] = useState<string>(classes[0]?.id ?? '')
-  const [learners, setLearners] = useState<Learner[]>([])
-  const [attendance, setAttendance] = useState<AttendanceMap>({})
-  const [saving, setSaving] = useState(false)
-  const [saved, setSaved] = useState(false)
-  const [loadingLearners, setLoadingLearners] = useState(false)
-
   const today = new Date().toISOString().split('T')[0]
 
+  const [selectedClass, setSelectedClass] = useState<string>(classes[0]?.id ?? '')
+  const [selectedDate, setSelectedDate] = useState<string>(today)
+  const [learners, setLearners] = useState<Learner[]>([])
+  const [attendance, setAttendance] = useState<AttendanceMap>({})
+  const [notes, setNotes] = useState<NotesMap>({})
+  const [openNotes, setOpenNotes] = useState<Record<string, boolean>>({})
+  const [saving, setSaving] = useState(false)
+  const [saved, setSaved] = useState(false)
+  const [saveError, setSaveError] = useState<string | null>(null)
+  const [loadingLearners, setLoadingLearners] = useState(false)
+
+  const isWeekend = (() => {
+    const d = new Date(selectedDate + 'T00:00:00')
+    return d.getDay() === 0 || d.getDay() === 6
+  })()
+
   useEffect(() => {
-    if (!selectedClass) return
+    if (!selectedClass || !selectedDate) return
     setLoadingLearners(true)
+    setSaved(false)
+    setSaveError(null)
     const supabase = createClient()
 
     Promise.all([
       supabase.from('learners').select('*').eq('class_id', selectedClass).order('surname'),
-      supabase.from('attendance').select('learner_id, status').eq('class_id', selectedClass).eq('date', today),
+      supabase.from('attendance').select('learner_id, status, notes')
+        .eq('class_id', selectedClass)
+        .eq('date', selectedDate),
     ]).then(([{ data: l }, { data: a }]) => {
       setLearners(l ?? [])
-      const map: AttendanceMap = {}
-      // Pre-fill existing records
-      a?.forEach((r) => { map[r.learner_id] = r.status as AttendanceStatus })
-      // Default remaining learners to 'present'
-      l?.forEach((learner) => { if (!map[learner.id]) map[learner.id] = 'present' })
-      setAttendance(map)
+      const attMap: AttendanceMap = {}
+      const notesMap: NotesMap = {}
+      a?.forEach((r) => {
+        attMap[r.learner_id] = r.status as AttendanceStatus
+        if (r.notes) notesMap[r.learner_id] = r.notes
+      })
+      l?.forEach((learner) => { if (!attMap[learner.id]) attMap[learner.id] = 'present' })
+      setAttendance(attMap)
+      setNotes(notesMap)
+      setOpenNotes({})
       setLoadingLearners(false)
     })
-  }, [selectedClass, today])
+  }, [selectedClass, selectedDate])
 
   function setStatus(learnerId: string, status: AttendanceStatus) {
     setAttendance((prev) => ({ ...prev, [learnerId]: status }))
     setSaved(false)
+    setSaveError(null)
   }
 
-  async function saveRegister() {
+  function setNote(learnerId: string, value: string) {
+    setNotes((prev) => ({ ...prev, [learnerId]: value }))
+    setSaved(false)
+    setSaveError(null)
+  }
+
+  function toggleNote(learnerId: string) {
+    setOpenNotes((prev) => ({ ...prev, [learnerId]: !prev[learnerId] }))
+  }
+
+  async function handleSave() {
     setSaving(true)
-    const supabase = createClient()
-
+    setSaveError(null)
     const records = Object.entries(attendance).map(([learner_id, status]) => ({
-      class_id: selectedClass,
       learner_id,
-      school_id: schoolId,
-      date: today,
       status,
-      recorded_by: teacherId,
+      notes: notes[learner_id] ?? null,
     }))
-
-    const { error } = await supabase
-      .from('attendance')
-      .upsert(records, { onConflict: 'class_id,learner_id,date' })
-
+    const result = await saveAttendance(selectedClass, selectedDate, records)
     setSaving(false)
-    if (!error) setSaved(true)
+    if (result.ok) {
+      setSaved(true)
+    } else {
+      setSaveError(result.error)
+    }
   }
 
   const presentCount = Object.values(attendance).filter((s) => s === 'present').length
@@ -86,22 +113,37 @@ export function AttendanceSheet({
 
   return (
     <div className="space-y-4">
-      {/* Class selector */}
-      <div className="flex flex-wrap gap-2">
-        {classes.map((cls) => (
-          <button
-            key={cls.id}
-            onClick={() => { setSelectedClass(cls.id); setSaved(false) }}
-            className={`px-4 py-2 rounded-lg text-sm font-medium border transition-colors ${
-              selectedClass === cls.id
-                ? 'bg-primary text-white border-primary'
-                : 'border-gray-200 text-gray-600 hover:border-gray-300 bg-white'
-            }`}
-          >
-            {cls.name} <span className="opacity-60">Gr {cls.grade}</span>
-          </button>
-        ))}
+      {/* Date + class selector row */}
+      <div className="flex flex-wrap gap-3 items-center">
+        <Input
+          type="date"
+          value={selectedDate}
+          max={today}
+          onChange={(e) => { setSelectedDate(e.target.value); setSaved(false) }}
+          className="w-44"
+        />
+        <div className="flex flex-wrap gap-2">
+          {classes.map((cls) => (
+            <button
+              key={cls.id}
+              onClick={() => { setSelectedClass(cls.id); setSaved(false) }}
+              className={`px-4 py-2 rounded-lg text-sm font-medium border transition-colors ${
+                selectedClass === cls.id
+                  ? 'bg-primary text-white border-primary'
+                  : 'border-gray-200 text-gray-600 hover:border-gray-300 bg-white'
+              }`}
+            >
+              {cls.name} <span className="opacity-60">Gr {cls.grade}</span>
+            </button>
+          ))}
+        </div>
       </div>
+
+      {isWeekend && (
+        <p className="text-xs text-amber-600 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+          Weekend date selected — you can still save (e.g. catch-up days).
+        </p>
+      )}
 
       {selectedClass && (
         <Card>
@@ -109,7 +151,9 @@ export function AttendanceSheet({
             <div className="flex items-center justify-between">
               <CardTitle className="text-base">
                 {classes.find((c) => c.id === selectedClass)?.name} —{' '}
-                {new Date(today).toLocaleDateString('en-ZA', { weekday: 'long', day: 'numeric', month: 'long' })}
+                {new Date(selectedDate + 'T00:00:00').toLocaleDateString('en-ZA', {
+                  weekday: 'long', day: 'numeric', month: 'long', year: 'numeric',
+                })}
               </CardTitle>
               <div className="flex items-center gap-3 text-sm">
                 <span className="text-green-600 font-medium">{presentCount} P</span>
@@ -125,7 +169,6 @@ export function AttendanceSheet({
               <p className="text-sm text-gray-400 py-4 text-center">No learners in this class yet.</p>
             ) : (
               <>
-                {/* Mark all present shortcut */}
                 <div className="flex gap-2 pb-2 border-b border-gray-100">
                   <Button
                     size="sm"
@@ -144,42 +187,66 @@ export function AttendanceSheet({
 
                 {learners.map((learner, i) => {
                   const status = attendance[learner.id] ?? 'present'
+                  const noteOpen = openNotes[learner.id] ?? false
+                  const hasNote = !!(notes[learner.id]?.trim())
+
                   return (
-                    <div
-                      key={learner.id}
-                      className="flex items-center justify-between py-2 border-b border-gray-50 last:border-0"
-                    >
-                      <div className="flex items-center gap-3">
-                        <span className="text-xs text-gray-400 w-6 text-right">{i + 1}</span>
-                        <div>
+                    <div key={learner.id} className="border-b border-gray-50 last:border-0">
+                      <div className="flex items-center justify-between py-2">
+                        <div className="flex items-center gap-3">
+                          <span className="text-xs text-gray-400 w-6 text-right">{i + 1}</span>
                           <p className="text-sm font-medium text-gray-800">
                             {learner.surname}, {learner.name}
                           </p>
                         </div>
-                      </div>
-                      <div className="flex gap-1">
-                        {STATUS_OPTIONS.map((opt) => (
+                        <div className="flex gap-1 items-center">
                           <button
-                            key={opt.value}
-                            onClick={() => setStatus(learner.id, opt.value)}
-                            className={`w-8 h-8 rounded-lg text-xs font-bold transition-colors ${
-                              status === opt.value
-                                ? opt.color
-                                : 'bg-gray-100 text-gray-400 hover:bg-gray-200'
+                            onClick={() => toggleNote(learner.id)}
+                            className={`p-1.5 rounded transition-colors ${
+                              hasNote || noteOpen
+                                ? 'text-primary bg-orange-50'
+                                : 'text-gray-300 hover:text-gray-500 hover:bg-gray-50'
                             }`}
-                            title={opt.value}
+                            title="Add note"
                           >
-                            {opt.label}
+                            <MessageSquare className="w-3.5 h-3.5" />
                           </button>
-                        ))}
+                          {STATUS_OPTIONS.map((opt) => (
+                            <button
+                              key={opt.value}
+                              onClick={() => setStatus(learner.id, opt.value)}
+                              className={`w-8 h-8 rounded-lg text-xs font-bold transition-colors ${
+                                status === opt.value
+                                  ? opt.color
+                                  : 'bg-gray-100 text-gray-400 hover:bg-gray-200'
+                              }`}
+                              title={opt.value}
+                            >
+                              {opt.label}
+                            </button>
+                          ))}
+                        </div>
                       </div>
+                      {noteOpen && (
+                        <div className="pl-9 pb-2">
+                          <Input
+                            placeholder="Add a note…"
+                            value={notes[learner.id] ?? ''}
+                            onChange={(e) => setNote(learner.id, e.target.value)}
+                            className="text-xs h-7"
+                          />
+                        </div>
+                      )}
                     </div>
                   )
                 })}
 
-                <div className="pt-3 flex items-center justify-between">
+                <div className="pt-3 flex items-center gap-3 justify-end">
                   {saved && <Badge variant="secondary" className="text-green-600">Register saved</Badge>}
-                  <Button onClick={saveRegister} disabled={saving} className="ml-auto gap-2">
+                  {saveError && (
+                    <p className="text-sm text-red-600 mr-auto">{saveError}</p>
+                  )}
+                  <Button onClick={handleSave} disabled={saving} className="gap-2">
                     <Save className="w-4 h-4" />
                     {saving ? 'Saving…' : 'Save register'}
                   </Button>
