@@ -99,7 +99,11 @@ export function LessonPlanForm({ classes, subjects, plan, isLeadership }: Props)
           <Label>Class *</Label>
           <Select value={fields.class_id} onValueChange={(v) => set('class_id', v ?? '')} disabled={isReadOnly}>
             <SelectTrigger>
-              <SelectValue placeholder="Select class" />
+              <span className="flex-1 text-left text-sm truncate">
+                {classes.find((c) => c.id === fields.class_id)
+                  ? `${classes.find((c) => c.id === fields.class_id)!.name} Gr ${classes.find((c) => c.id === fields.class_id)!.grade}`
+                  : 'Select class'}
+              </span>
             </SelectTrigger>
             <SelectContent>
               {classes.map((c) => (
@@ -115,7 +119,9 @@ export function LessonPlanForm({ classes, subjects, plan, isLeadership }: Props)
           <Label>Subject</Label>
           <Select value={fields.subject_id || 'none'} onValueChange={(v) => set('subject_id', !v || v === 'none' ? '' : v)} disabled={isReadOnly}>
             <SelectTrigger>
-              <SelectValue placeholder="None" />
+              <span className="flex-1 text-left text-sm truncate">
+                {subjects.find((s) => s.id === fields.subject_id)?.name ?? 'None'}
+              </span>
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="none">None</SelectItem>

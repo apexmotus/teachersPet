@@ -80,7 +80,7 @@ export function ClassDialog({ open, onClose, cls }: Props) {
               <Label>Grade *</Label>
               <Select value={fields.grade} onValueChange={(v) => set('grade', v ?? fields.grade)}>
                 <SelectTrigger>
-                  <SelectValue />
+                  <span className="flex-1 text-left text-sm">Grade {fields.grade}</span>
                 </SelectTrigger>
                 <SelectContent>
                   {GRADES.map((g) => (
@@ -94,7 +94,7 @@ export function ClassDialog({ open, onClose, cls }: Props) {
               <Label>Year *</Label>
               <Select value={fields.year} onValueChange={(v) => set('year', v ?? fields.year)}>
                 <SelectTrigger>
-                  <SelectValue />
+                  <span className="flex-1 text-left text-sm">{fields.year}</span>
                 </SelectTrigger>
                 <SelectContent>
                   {YEARS.map((y) => (

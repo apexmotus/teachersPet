@@ -74,7 +74,13 @@ export function LearnersTable({ learners, classes }: Props) {
         />
         <Select value={filterClass} onValueChange={(v) => setFilterClass(v ?? 'all')}>
           <SelectTrigger className="w-44">
-            <SelectValue placeholder="All classes" />
+            <span className="flex-1 text-left text-sm truncate">
+              {filterClass === 'all'
+                ? 'All classes'
+                : (classes.find((c) => c.id === filterClass)
+                    ? `${classes.find((c) => c.id === filterClass)!.name} Gr ${classes.find((c) => c.id === filterClass)!.grade}`
+                    : 'All classes')}
+            </span>
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">All classes</SelectItem>

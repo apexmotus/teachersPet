@@ -97,12 +97,16 @@ export function LearnerDialog({ open, onClose, classes, learner }: Props) {
             <Label>Class *</Label>
             <Select value={fields.class_id} onValueChange={(v) => set('class_id', v ?? '')}>
               <SelectTrigger>
-                <SelectValue placeholder="Select class" />
+                <span className="flex-1 text-left text-sm truncate">
+                  {classes.find((c) => c.id === fields.class_id)
+                    ? `${classes.find((c) => c.id === fields.class_id)!.name} — Gr ${classes.find((c) => c.id === fields.class_id)!.grade}`
+                    : 'Select class'}
+                </span>
               </SelectTrigger>
               <SelectContent>
                 {classes.map((c) => (
                   <SelectItem key={c.id} value={c.id}>
-                    {c.name} <span className="text-muted-foreground">Gr {c.grade}</span>
+                    {c.name} — Gr {c.grade}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -114,8 +118,9 @@ export function LearnerDialog({ open, onClose, classes, learner }: Props) {
             <Input
               id="id_number"
               placeholder="13 digits"
+              inputMode="numeric"
               value={fields.id_number}
-              onChange={(e) => set('id_number', e.target.value)}
+              onChange={(e) => set('id_number', e.target.value.replace(/\D/g, ''))}
               maxLength={13}
             />
           </div>

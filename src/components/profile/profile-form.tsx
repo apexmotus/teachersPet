@@ -112,12 +112,26 @@ export function ProfileForm({ profile, school, email }: { profile: Profile; scho
 
             <div className="space-y-2">
               <Label htmlFor="phone">Phone number</Label>
-              <Input id="phone" type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="082 000 0000" />
+              <Input
+                id="phone"
+                type="tel"
+                inputMode="tel"
+                value={phone}
+                onChange={(e) => setPhone(e.target.value.replace(/[^\d\s+()-]/g, ''))}
+                placeholder="082 000 0000"
+              />
             </div>
 
             <div className="space-y-2">
               <Label htmlFor="idNumber">ID number</Label>
-              <Input id="idNumber" value={idNumber} onChange={(e) => setIdNumber(e.target.value)} placeholder="8001015009087" />
+              <Input
+                id="idNumber"
+                inputMode="numeric"
+                value={idNumber}
+                onChange={(e) => setIdNumber(e.target.value.replace(/\D/g, ''))}
+                placeholder="8001015009087"
+                maxLength={13}
+              />
             </div>
 
             <div className="space-y-2">
