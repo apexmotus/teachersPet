@@ -1,3 +1,4 @@
+import type { Metadata } from 'next'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
 import {
@@ -13,6 +14,55 @@ import {
   Globe,
   MapPin,
 } from 'lucide-react'
+
+export const metadata: Metadata = {
+  title: "Teacher's PET — The Digital Companion for Educators | Innobuntu Group",
+  description:
+    "Innobuntu Group's Teacher's PET is an EdTech platform that eliminates manual school administration. Digitise attendance, lesson plans, learner records, and communication — built for Africa's classrooms.",
+  openGraph: {
+    title: "Teacher's PET — The Digital Companion for Educators",
+    description:
+      "Eliminate manual administration. Teacher's PET by Innobuntu Group helps educators across Africa manage attendance, lesson plans, and learner records — all in one place.",
+    url: '/',
+  },
+  alternates: { canonical: '/' },
+}
+
+const JSON_LD = {
+  '@context': 'https://schema.org',
+  '@graph': [
+    {
+      '@type': 'Organization',
+      '@id': 'https://www.innobuntu.co.za/#organization',
+      name: 'Innobuntu Group',
+      url: 'https://www.innobuntu.co.za',
+      contactPoint: [
+        { '@type': 'ContactPoint', telephone: '+27-65-840-4432', contactType: 'customer service' },
+        { '@type': 'ContactPoint', telephone: '+27-69-219-9227', contactType: 'customer service' },
+      ],
+      email: 'info@innobuntu.co.za',
+      address: { '@type': 'PostalAddress', addressLocality: 'Rustenburg', addressCountry: 'ZA' },
+      description:
+        "Innobuntu Group is a forward-thinking African technology company driven by innovation and the Ubuntu philosophy — 'I am because we are.'",
+    },
+    {
+      '@type': 'SoftwareApplication',
+      name: "Teacher's PET",
+      applicationCategory: 'EducationApplication',
+      operatingSystem: 'Web',
+      description:
+        "Teacher's PET is an EdTech solution by Innobuntu Group that digitises school administration — attendance, lesson plans, learner records, and communication — in one platform.",
+      offers: { '@type': 'Offer', price: '0', priceCurrency: 'ZAR', availability: 'https://schema.org/InStock' },
+      publisher: { '@id': 'https://www.innobuntu.co.za/#organization' },
+    },
+    {
+      '@type': 'WebSite',
+      url: '/',
+      name: "Teacher's PET",
+      publisher: { '@id': 'https://www.innobuntu.co.za/#organization' },
+    },
+  ],
+}
 
 const FEATURES = [
   {
@@ -62,6 +112,10 @@ export default async function LandingPage() {
 
   return (
     <div className="min-h-screen bg-white text-gray-900 font-sans">
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(JSON_LD).replace(/</g, '\\u003c') }}
+      />
 
       {/* ── NAV ─────────────────────────────────────────────────────── */}
       <header className="fixed inset-x-0 top-0 z-50 bg-[oklch(0.18_0.04_250)]/95 backdrop-blur border-b border-white/10">
