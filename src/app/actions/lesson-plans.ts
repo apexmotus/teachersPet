@@ -2,6 +2,7 @@
 
 import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
+import { createNotification } from '@/lib/notifications'
 
 type Result = { ok: true } | { ok: false; error: string }
 type CreateResult = { ok: true; id: string } | { ok: false; error: string }
@@ -137,6 +138,24 @@ export async function submitLessonPlan(id: string): Promise<Result> {
     .eq('teacher_id', ctx.user.id)
 
   if (error) return { ok: false, error: error.message }
+
+  // Notify all leadership in the school
+  const { data: leaders } = await supabase
+    .from('profiles')
+    .select('id')
+    .eq('school_id', ctx.profile.school_id)
+    .in('role', ['dh', 'dp', 'principal'])
+  for (const leader of leaders ?? []) {
+    await createNotification({
+      userId: leader.id,
+      schoolId: ctx.profile.school_id,
+      type: 'lesson_plan_submitted',
+      title: 'Lesson plan submitted for review',
+      body: `A lesson plan has been submitted for your review.`,
+      data: { lesson_plan_id: id },
+    })
+  }
+
   revalidatePath('/lesson-plans')
   revalidatePath(`/lesson-plans/${id}`)
   return { ok: true }
@@ -152,7 +171,7 @@ export async function approveLessonPlan(id: string): Promise<Result> {
 
   const { data: plan } = await supabase
     .from('lesson_plans')
-    .select('status')
+    .select('status, teacher_id, topic')
     .eq('id', id)
     .single()
   if (!plan) return { ok: false, error: 'Lesson plan not found.' }
@@ -164,6 +183,17 @@ export async function approveLessonPlan(id: string): Promise<Result> {
     .eq('id', id)
 
   if (error) return { ok: false, error: error.message }
+
+  // Notify the plan's author
+  await createNotification({
+    userId: plan.teacher_id,
+    schoolId: ctx.profile.school_id,
+    type: 'lesson_plan_approved',
+    title: 'Lesson plan approved',
+    body: `Your lesson plan "${plan.topic}" has been approved.`,
+    data: { lesson_plan_id: id },
+  })
+
   revalidatePath('/lesson-plans')
   revalidatePath(`/lesson-plans/${id}`)
   return { ok: true }

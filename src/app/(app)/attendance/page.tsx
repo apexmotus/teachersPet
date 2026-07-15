@@ -3,7 +3,11 @@ import { redirect } from 'next/navigation'
 import { AttendanceSheet } from '@/components/attendance/attendance-sheet'
 import { getTeacherClasses } from '@/lib/queries/classes'
 
-export default async function AttendancePage() {
+export default async function AttendancePage({
+  searchParams,
+}: {
+  searchParams: Promise<{ class_id?: string }>
+}) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
@@ -22,12 +26,10 @@ export default async function AttendancePage() {
     )
   }
 
-  const { classes, fallback } = await getTeacherClasses(
-    supabase,
-    user.id,
-    profile.school_id,
-    profile.role,
-  )
+  const [{ classes, fallback }, sp] = await Promise.all([
+    getTeacherClasses(supabase, user.id, profile.school_id, profile.role),
+    searchParams,
+  ])
 
   return (
     <div className="p-6 max-w-4xl mx-auto space-y-6">
@@ -40,7 +42,12 @@ export default async function AttendancePage() {
           No class assignments found for your account — showing all school classes. Contact your principal to set up class assignments.
         </p>
       )}
-      <AttendanceSheet classes={classes} teacherId={user.id} schoolId={profile.school_id} />
+      <AttendanceSheet
+        classes={classes}
+        teacherId={user.id}
+        schoolId={profile.school_id}
+        defaultClassId={sp.class_id}
+      />
     </div>
   )
 }

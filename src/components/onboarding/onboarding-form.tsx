@@ -16,11 +16,11 @@ const ROLES: { value: Role; label: string }[] = [
 ]
 
 type Step = 'profile' | 'school'
-const STEPS: Step[] = ['profile', 'school']
 
-export function OnboardingForm({ profile }: { profile: Profile }) {
+export function OnboardingForm({ profile, hasSchool }: { profile: Profile; hasSchool: boolean }) {
   const router = useRouter()
-  const [step, setStep]     = useState<Step>(profile.name ? 'school' : 'profile')
+  const STEPS: Step[] = hasSchool ? ['profile'] : ['profile', 'school']
+  const [step, setStep]     = useState<Step>(profile.name && !hasSchool ? 'school' : 'profile')
   const [error, setError]   = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
 
@@ -40,10 +40,22 @@ export function OnboardingForm({ profile }: { profile: Profile }) {
 
   const stepIndex = STEPS.indexOf(step)
 
-  function handleProfileStep(e: React.FormEvent) {
+  async function handleProfileStep(e: React.FormEvent) {
     e.preventDefault()
     setError(null)
-    setStep('school')
+    if (hasSchool) {
+      // Invited user — skip school step
+      setLoading(true)
+      const result = await completeOnboarding({
+        name, surname, phone, idNumber, role,
+        schoolAction: 'skip',
+      })
+      setLoading(false)
+      if (!result.ok) { setError(result.error); return }
+      window.location.href = '/dashboard'
+    } else {
+      setStep('school')
+    }
   }
 
   async function handleSchoolStep(e: React.FormEvent) {
@@ -81,7 +93,11 @@ export function OnboardingForm({ profile }: { profile: Profile }) {
             <span className="text-2xl font-bold text-white">Teacher&apos;s</span>
             <span className="text-2xl font-bold text-primary">PET</span>
           </div>
-          <p className="text-sm text-white/60">Let&apos;s finish setting up your account</p>
+          <p className="text-sm text-white/60">
+            {hasSchool
+              ? 'You\'ve been invited — just fill in your details'
+              : 'Let\'s finish setting up your account'}
+          </p>
         </div>
 
         <div className="bg-white rounded-2xl shadow-2xl p-8 space-y-5">
@@ -154,7 +170,9 @@ export function OnboardingForm({ profile }: { profile: Profile }) {
                   {ROLES.map((r) => <option key={r.value} value={r.value}>{r.label}</option>)}
                 </select>
               </div>
-              <Button type="submit" className="w-full">Continue</Button>
+              <Button type="submit" className="w-full" disabled={loading}>
+                {loading ? 'Setting up…' : hasSchool ? 'Finish setup' : 'Continue'}
+              </Button>
             </form>
           )}
 

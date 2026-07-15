@@ -3,8 +3,6 @@
 import { useState } from 'react'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import { LearnerDialog } from './learner-dialog'
 import { deleteLearner } from '@/app/actions/learners'
@@ -19,25 +17,15 @@ interface LearnerWithClass extends Learner {
 interface Props {
   learners: LearnerWithClass[]
   classes: Pick<Class, 'id' | 'name' | 'grade'>[]
+  pageOffset?: number
 }
 
-export function LearnersTable({ learners, classes }: Props) {
-  const [search, setSearch] = useState('')
-  const [filterClass, setFilterClass] = useState('all')
+export function LearnersTable({ learners, classes, pageOffset = 0 }: Props) {
   const [dialogOpen, setDialogOpen] = useState(false)
   const [editing, setEditing] = useState<Learner | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<LearnerWithClass | null>(null)
   const [deleting, setDeleting] = useState(false)
   const [deleteError, setDeleteError] = useState<string | null>(null)
-
-  const filtered = learners.filter((l) => {
-    const matchClass = filterClass === 'all' || l.class_id === filterClass
-    const q = search.toLowerCase()
-    const matchSearch = !q ||
-      l.name.toLowerCase().includes(q) ||
-      l.surname.toLowerCase().includes(q)
-    return matchClass && matchSearch
-  })
 
   function openAdd() {
     setEditing(null)
@@ -64,46 +52,16 @@ export function LearnersTable({ learners, classes }: Props) {
 
   return (
     <>
-      {/* Toolbar */}
-      <div className="flex flex-wrap gap-3 items-center">
-        <Input
-          placeholder="Search by name…"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          className="w-56"
-        />
-        <Select value={filterClass} onValueChange={(v) => setFilterClass(v ?? 'all')}>
-          <SelectTrigger className="w-44">
-            <span className="flex-1 text-left text-sm truncate">
-              {filterClass === 'all'
-                ? 'All classes'
-                : (classes.find((c) => c.id === filterClass)
-                    ? `${classes.find((c) => c.id === filterClass)!.name} Gr ${classes.find((c) => c.id === filterClass)!.grade}`
-                    : 'All classes')}
-            </span>
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All classes</SelectItem>
-            {classes.map((c) => (
-              <SelectItem key={c.id} value={c.id}>
-                {c.name} Gr {c.grade}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        <Button className="ml-auto gap-2" onClick={openAdd}>
+      <div className="flex justify-end">
+        <Button className="gap-2" onClick={openAdd}>
           <Plus className="w-4 h-4" /> Add learner
         </Button>
       </div>
 
-      {filtered.length === 0 ? (
+      {learners.length === 0 ? (
         <div className="rounded-lg border border-dashed border-gray-200 py-16 text-center">
-          <p className="text-sm text-gray-500 mb-3">
-            {learners.length === 0 ? 'No learners yet.' : 'No learners match your search.'}
-          </p>
-          {learners.length === 0 && (
-            <Button variant="outline" onClick={openAdd}>Add your first learner</Button>
-          )}
+          <p className="text-sm text-gray-500 mb-3">No learners match your search.</p>
+          <Button variant="outline" onClick={openAdd}>Add your first learner</Button>
         </div>
       ) : (
         <div className="rounded-lg border border-gray-200 overflow-hidden">
@@ -120,9 +78,9 @@ export function LearnersTable({ learners, classes }: Props) {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filtered.map((l, i) => (
+              {learners.map((l, i) => (
                 <TableRow key={l.id}>
-                  <TableCell className="text-gray-400 text-xs">{i + 1}</TableCell>
+                  <TableCell className="text-gray-400 text-xs">{pageOffset + i + 1}</TableCell>
                   <TableCell className="font-medium">{l.surname}</TableCell>
                   <TableCell>{l.name}</TableCell>
                   <TableCell className="text-gray-600 text-sm">

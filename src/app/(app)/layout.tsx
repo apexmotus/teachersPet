@@ -1,7 +1,7 @@
 import type { Metadata } from 'next'
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
-import { Sidebar } from '@/components/layout/sidebar'
+import { AppShell } from '@/components/layout/app-shell'
 
 export const metadata: Metadata = {
   robots: { index: false, follow: false },
@@ -17,25 +17,24 @@ export default async function AppLayout({
 
   if (!user) redirect('/login')
 
-  const { data: profile } = await supabase
-    .from('profiles')
-    .select('*')
-    .eq('id', user.id)
-    .single()
+  const [{ data: profile }, { count: unreadCount }] = await Promise.all([
+    supabase.from('profiles').select('*').eq('id', user.id).single(),
+    supabase
+      .from('notifications')
+      .select('*', { count: 'exact', head: true })
+      .eq('user_id', user.id)
+      .is('read_at', null),
+  ])
 
   if (!profile) redirect('/login')
 
-  // /onboarding lives outside this layout group so this redirect never loops
   if (!profile.onboarding_complete || !profile.school_id) {
     redirect('/onboarding')
   }
 
   return (
-    <div className="flex h-screen overflow-hidden bg-gray-50">
-      <Sidebar profile={profile} />
-      <main className="flex-1 overflow-y-auto">
-        {children}
-      </main>
-    </div>
+    <AppShell profile={profile} unreadCount={unreadCount ?? 0}>
+      {children}
+    </AppShell>
   )
 }

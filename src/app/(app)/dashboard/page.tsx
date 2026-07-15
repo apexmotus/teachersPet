@@ -4,7 +4,11 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { ClipboardList, Megaphone, Users, BookOpen } from 'lucide-react'
 import Link from 'next/link'
-import type { Profile } from '@/lib/types/database'
+import type { Profile, TimetableSlot, LessonOccurrence } from '@/lib/types/database'
+import { ReflectionBanner } from '@/components/dashboard/reflection-banner'
+import { TeacherDashboardSection } from '@/components/dashboard/teacher-dashboard-section'
+import { LeadershipDashboardSection } from '@/components/dashboard/leadership-dashboard-section'
+import { getTeacherClasses } from '@/lib/queries/classes'
 
 const ROLE_LABELS: Record<string, string> = {
   teacher:   'Teacher',
@@ -13,22 +17,145 @@ const ROLE_LABELS: Record<string, string> = {
   principal: 'Principal',
 }
 
+const LEADERSHIP = ['dh', 'dp', 'principal']
+
+type SlotRow = TimetableSlot & {
+  classes: { name: string; grade: number } | null
+  subjects: { name: string } | null
+}
+
 export default async function DashboardPage() {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
 
-  const [{ data: profile }, { data: announcements }, { data: classes }, { count: learnerCount }] =
-    await Promise.all([
-      supabase.from('profiles').select('*, schools(name)').eq('id', user.id).single(),
-      supabase.from('announcements').select('*').order('created_at', { ascending: false }).limit(3),
-      supabase.from('classes').select('id, name, grade'),
-      supabase.from('learners').select('*', { count: 'exact', head: true }),
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('*, schools(name)')
+    .eq('id', user.id)
+    .single()
+  if (!profile || !profile.school_id) redirect('/login')
+  const schoolId = profile.school_id
+
+  const isLeadership = LEADERSHIP.includes(profile.role)
+  const todayStr = new Date().toISOString().split('T')[0]
+  const todayJs = new Date()
+  const dowJs = todayJs.getDay() // 0=Sun, 6=Sat
+  const isWeekend = dowJs === 0 || dowJs === 6
+  const todayDow = isWeekend ? null : dowJs // 1=Mon…5=Fri matches DB
+
+  // Base parallel fetches (all roles)
+  const [
+    { data: announcements },
+    { count: learnerCount },
+    { data: rawTodayReflection },
+  ] = await Promise.all([
+    supabase.from('announcements').select('*').order('created_at', { ascending: false }).limit(3),
+    supabase.from('learners').select('*', { count: 'exact', head: true }),
+    supabase
+      .from('reflections')
+      .select('id, notes')
+      .eq('teacher_id', user.id)
+      .eq('date', todayStr)
+      .maybeSingle(),
+  ])
+
+  const todayReflection = rawTodayReflection as Pick<
+    import('@/lib/types/database').Reflection, 'id' | 'notes'
+  > | null
+
+  // Teacher-specific fetches
+  const { classes: teacherClasses } = await getTeacherClasses(
+    supabase, user.id, schoolId, profile.role
+  )
+
+  let todaySlots: SlotRow[] = []
+  let todayOccurrences: Pick<LessonOccurrence, 'timetable_slot_id' | 'lesson_plan_id' | 'status'>[] = []
+  let classesWithRegister: string[] = []
+
+  if (todayDow) {
+    const [{ data: rawSlots }, { data: rawOcc }] = await Promise.all([
+      supabase
+        .from('timetable_slots')
+        .select('*, classes(name, grade), subjects(name)')
+        .eq('school_id', schoolId)
+        .eq('teacher_id', user.id)
+        .eq('day_of_week', todayDow)
+        .order('period'),
+      supabase
+        .from('lesson_occurrences')
+        .select('timetable_slot_id, lesson_plan_id, status')
+        .eq('school_id', schoolId)
+        .eq('date', todayStr),
+    ])
+    todaySlots = (rawSlots ?? []) as SlotRow[]
+    todayOccurrences = (rawOcc ?? []) as typeof todayOccurrences
+  }
+
+  if (teacherClasses.length > 0) {
+    const { data: attToday } = await supabase
+      .from('attendance')
+      .select('class_id')
+      .eq('school_id', schoolId)
+      .eq('date', todayStr)
+      .in('class_id', teacherClasses.map((c) => c.id))
+    classesWithRegister = [...new Set((attToday ?? []).map((a) => a.class_id))]
+  }
+
+  // Leadership-specific fetches
+  let attendancePercent: number | null = null
+  let totalAttendanceRecords = 0
+  let pendingLessonPlans = 0
+  let classesWithNoRegister: { id: string; name: string; grade: number }[] = []
+
+  if (isLeadership) {
+    const [
+      { count: totalAtt },
+      { count: presentAtt },
+      { count: pending },
+      { data: allClasses },
+      { data: classesWithAtt },
+    ] = await Promise.all([
+      supabase
+        .from('attendance')
+        .select('*', { count: 'exact', head: true })
+        .eq('school_id', schoolId)
+        .eq('date', todayStr),
+      supabase
+        .from('attendance')
+        .select('*', { count: 'exact', head: true })
+        .eq('school_id', schoolId)
+        .eq('date', todayStr)
+        .in('status', ['present', 'late']),
+      supabase
+        .from('lesson_plans')
+        .select('*', { count: 'exact', head: true })
+        .eq('school_id', schoolId)
+        .eq('status', 'submitted'),
+      supabase
+        .from('classes')
+        .select('id, name, grade')
+        .eq('school_id', schoolId)
+        .order('grade'),
+      supabase
+        .from('attendance')
+        .select('class_id')
+        .eq('school_id', schoolId)
+        .eq('date', todayStr),
     ])
 
-  if (!profile) redirect('/login')
+    totalAttendanceRecords = totalAtt ?? 0
+    pendingLessonPlans = pending ?? 0
+    if (totalAtt && totalAtt > 0) {
+      attendancePercent = Math.round(((presentAtt ?? 0) / totalAtt) * 100)
+    }
+    const doneSet = new Set((classesWithAtt ?? []).map((a) => a.class_id))
+    classesWithNoRegister = (allClasses ?? []).filter((c) => !doneSet.has(c.id))
+  }
 
-  const today = new Date().toLocaleDateString('en-ZA', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })
+  const today = todayJs.toLocaleDateString('en-ZA', {
+    weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
+  })
 
   const quickLinks = [
     { href: '/attendance',    label: 'Take Attendance',  icon: ClipboardList, desc: 'Record today\'s class register' },
@@ -36,6 +163,8 @@ export default async function DashboardPage() {
     { href: '/learners',      label: 'Learners',         icon: Users,         desc: `${learnerCount ?? 0} in your school` },
     { href: '/lesson-plans',  label: 'Lesson Plans',     icon: BookOpen,      desc: 'Plan and prepare lessons' },
   ]
+
+  const showReflectionBanner = !isWeekend
 
   return (
     <div className="p-6 max-w-5xl mx-auto space-y-6">
@@ -54,6 +183,30 @@ export default async function DashboardPage() {
           </p>
         )}
       </div>
+
+      {/* End-of-day reflection banner (all roles that teach) */}
+      {showReflectionBanner && (
+        <ReflectionBanner todayReflection={todayReflection} date={todayStr} />
+      )}
+
+      {/* Role-specific dashboard section */}
+      {isLeadership ? (
+        <LeadershipDashboardSection
+          attendancePercent={attendancePercent}
+          totalAttendanceRecords={totalAttendanceRecords}
+          pendingLessonPlans={pendingLessonPlans}
+          classesWithNoRegister={classesWithNoRegister}
+          totalClasses={teacherClasses.length}
+        />
+      ) : (
+        <TeacherDashboardSection
+          todaySlots={todaySlots}
+          todayOccurrences={todayOccurrences}
+          classesWithRegister={classesWithRegister}
+          teacherClasses={teacherClasses}
+          isWeekend={isWeekend}
+        />
+      )}
 
       {/* Quick links */}
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
@@ -79,8 +232,8 @@ export default async function DashboardPage() {
             <CardTitle className="text-base">My Classes</CardTitle>
           </CardHeader>
           <CardContent className="space-y-2">
-            {classes && classes.length > 0 ? (
-              classes.map((cls) => (
+            {teacherClasses && teacherClasses.length > 0 ? (
+              teacherClasses.map((cls) => (
                 <div key={cls.id} className="flex items-center justify-between py-1.5 border-b border-gray-100 last:border-0">
                   <span className="text-sm font-medium text-gray-700">{cls.name}</span>
                   <Badge variant="outline">Grade {cls.grade}</Badge>

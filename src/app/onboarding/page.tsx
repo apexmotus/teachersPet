@@ -18,5 +18,5 @@ export default async function OnboardingPage() {
   // Already onboarded — send to dashboard
   if (profile.onboarding_complete && profile.school_id) redirect('/dashboard')
 
-  return <OnboardingForm profile={profile} />
+  return <OnboardingForm profile={profile} hasSchool={!!profile.school_id} />
 }

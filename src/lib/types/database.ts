@@ -4,6 +4,13 @@ export type AnnouncementType = 'general' | 'meeting' | 'word_of_day' | 'urgent'
 export type AssessmentType = 'informal_task' | 'test' | 'exam' | 'assignment'
 export type DocumentCategory = 'lesson_plan' | 'assessment' | 'memo' | 'admin' | 'other'
 export type LessonPlanStatus = 'draft' | 'submitted' | 'approved'
+export type BlackBookSeverity = 'minor' | 'moderate' | 'serious'
+export type OccurrenceStatus = 'upcoming' | 'active' | 'completed'
+export type NotificationType =
+  | 'lesson_plan_submitted'
+  | 'lesson_plan_approved'
+  | 'black_book_serious'
+  | 'reflection_due'
 
 export interface Database {
   public: {
@@ -192,6 +199,7 @@ export interface Database {
           status: AttendanceStatus
           notes: string | null
           recorded_by: string | null
+          occurrence_id: string | null
           created_at: string
         }
         Insert: {
@@ -203,6 +211,7 @@ export interface Database {
           status: AttendanceStatus
           notes?: string | null
           recorded_by?: string | null
+          occurrence_id?: string | null
           created_at?: string
         }
         Update: Partial<Database['public']['Tables']['attendance']['Insert']>
@@ -346,6 +355,130 @@ export interface Database {
         Update: Partial<Database['public']['Tables']['assessment_results']['Insert']>
         Relationships: []
       }
+      lesson_occurrences: {
+        Row: {
+          id: string
+          school_id: string
+          timetable_slot_id: string
+          lesson_plan_id: string | null
+          date: string
+          status: OccurrenceStatus
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          school_id: string
+          timetable_slot_id: string
+          lesson_plan_id?: string | null
+          date: string
+          status?: OccurrenceStatus
+          created_at?: string
+        }
+        Update: Partial<Database['public']['Tables']['lesson_occurrences']['Insert']>
+        Relationships: []
+      }
+      reflections: {
+        Row: {
+          id: string
+          school_id: string
+          teacher_id: string
+          date: string
+          notes: string
+          created_at: string
+          updated_at: string | null
+        }
+        Insert: {
+          id?: string
+          school_id: string
+          teacher_id: string
+          date: string
+          notes: string
+          created_at?: string
+          updated_at?: string | null
+        }
+        Update: Partial<Database['public']['Tables']['reflections']['Insert']>
+        Relationships: []
+      }
+      black_book_entries: {
+        Row: {
+          id: string
+          school_id: string
+          teacher_id: string
+          learner_id: string
+          class_id: string
+          occurrence_id: string | null
+          date: string
+          description: string
+          severity: BlackBookSeverity
+          principal_notes: string | null
+          created_at: string
+          updated_at: string | null
+        }
+        Insert: {
+          id?: string
+          school_id: string
+          teacher_id: string
+          learner_id: string
+          class_id: string
+          occurrence_id?: string | null
+          date: string
+          description: string
+          severity?: BlackBookSeverity
+          principal_notes?: string | null
+          created_at?: string
+          updated_at?: string | null
+        }
+        Update: Partial<Database['public']['Tables']['black_book_entries']['Insert']>
+        Relationships: []
+      }
+      notifications: {
+        Row: {
+          id: string
+          user_id: string
+          school_id: string
+          type: NotificationType
+          title: string
+          body: string
+          data: Record<string, unknown>
+          read_at: string | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          school_id: string
+          type: NotificationType
+          title: string
+          body: string
+          data?: Record<string, unknown>
+          read_at?: string | null
+          created_at?: string
+        }
+        Update: Partial<Database['public']['Tables']['notifications']['Insert']>
+        Relationships: []
+      }
+      staff_invitations: {
+        Row: {
+          id: string
+          school_id: string
+          email: string
+          role: Role
+          invited_by: string
+          accepted_at: string | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          school_id: string
+          email: string
+          role: Role
+          invited_by: string
+          accepted_at?: string | null
+          created_at?: string
+        }
+        Update: Partial<Database['public']['Tables']['staff_invitations']['Insert']>
+        Relationships: []
+      }
     }
     Views: Record<string, never>
     Functions: Record<string, never>
@@ -368,3 +501,8 @@ export type LessonPlan = Database['public']['Tables']['lesson_plans']['Row']
 export type DocumentRow = Database['public']['Tables']['documents']['Row']
 export type Assessment = Database['public']['Tables']['assessments']['Row']
 export type AssessmentResult = Database['public']['Tables']['assessment_results']['Row']
+export type LessonOccurrence = Database['public']['Tables']['lesson_occurrences']['Row']
+export type Reflection = Database['public']['Tables']['reflections']['Row']
+export type BlackBookEntry = Database['public']['Tables']['black_book_entries']['Row']
+export type Notification = Database['public']['Tables']['notifications']['Row']
+export type StaffInvitation = Database['public']['Tables']['staff_invitations']['Row']

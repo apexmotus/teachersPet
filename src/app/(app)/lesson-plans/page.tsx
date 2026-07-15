@@ -2,8 +2,12 @@ import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { buttonVariants } from '@/components/ui/button'
+import { Paginator } from '@/components/ui/paginator'
+import { getPaginationMeta } from '@/lib/utils'
 import { Plus } from 'lucide-react'
 import type { LessonPlan, LessonPlanStatus } from '@/lib/types/database'
+
+const PAGE_SIZE = 20
 
 type PlanRow = LessonPlan & {
   classes: { name: string; grade: number } | null
@@ -20,7 +24,7 @@ const STATUS_STYLE: Record<LessonPlanStatus, string> = {
 export default async function LessonPlansPage({
   searchParams,
 }: {
-  searchParams: Promise<{ tab?: string }>
+  searchParams: Promise<{ tab?: string; page?: string }>
 }) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -43,27 +47,35 @@ export default async function LessonPlansPage({
   const isLeadership = ['dh', 'dp', 'principal'].includes(profile.role)
   const params = await searchParams
   const tab = params.tab === 'review' && isLeadership ? 'review' : 'mine'
+  const page = Math.max(1, parseInt(params.page ?? '1', 10) || 1)
+  const offset = (page - 1) * PAGE_SIZE
 
-  const [{ data: rawMy }, { data: rawReview }] = await Promise.all([
+  const [{ data: rawMy, count: myCount }, { data: rawReview, count: reviewCount }] = await Promise.all([
     supabase
       .from('lesson_plans')
-      .select('*, classes(name, grade), subjects(name)')
+      .select('*, classes(name, grade), subjects(name)', { count: 'exact' })
       .eq('teacher_id', user.id)
-      .order('date', { ascending: false }),
+      .order('date', { ascending: false })
+      .range(offset, offset + PAGE_SIZE - 1),
     isLeadership
       ? supabase
           .from('lesson_plans')
-          .select('*, classes(name, grade), subjects(name), profiles(name, surname)')
+          .select('*, classes(name, grade), subjects(name), profiles(name, surname)', { count: 'exact' })
           .eq('school_id', profile.school_id)
           .eq('status', 'submitted')
           .order('date', { ascending: false })
-      : Promise.resolve({ data: [] as unknown[] }),
+          .range(offset, offset + PAGE_SIZE - 1)
+      : Promise.resolve({ data: [] as unknown[], count: 0 }),
   ])
 
   const myPlans = rawMy as PlanRow[] | null
   const reviewPlans = rawReview as PlanRow[] | null
 
   const displayPlans = tab === 'review' ? (reviewPlans ?? []) : (myPlans ?? [])
+  const totalCount = tab === 'review' ? (reviewCount ?? 0) : (myCount ?? 0)
+  const pagination = getPaginationMeta(totalCount, page, PAGE_SIZE)
+
+  const reviewTotalCount = reviewCount ?? 0
 
   return (
     <div className="p-6 max-w-4xl mx-auto space-y-6">
@@ -98,9 +110,9 @@ export default async function LessonPlansPage({
             }`}
           >
             Submitted for review
-            {(reviewPlans?.length ?? 0) > 0 && (
+            {reviewTotalCount > 0 && (
               <span className="ml-1.5 bg-blue-500 text-white text-xs rounded-full px-1.5 py-0.5">
-                {reviewPlans?.length}
+                {reviewTotalCount}
               </span>
             )}
           </Link>
@@ -150,6 +162,12 @@ export default async function LessonPlansPage({
           ))}
         </div>
       )}
+
+      <Paginator
+        page={pagination.page}
+        totalPages={pagination.totalPages}
+        baseUrl={tab === 'review' ? '/lesson-plans?tab=review' : '/lesson-plans'}
+      />
     </div>
   )
 }

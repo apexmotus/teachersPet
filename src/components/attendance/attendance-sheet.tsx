@@ -8,7 +8,8 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { saveAttendance } from '@/app/actions/attendance'
 import type { Class, Learner, AttendanceStatus } from '@/lib/types/database'
-import { CheckCircle, XCircle, Clock, Save, MessageSquare } from 'lucide-react'
+import { CheckCircle, XCircle, Clock, Save, MessageSquare, Flag, Download } from 'lucide-react'
+import { useRouter } from 'next/navigation'
 
 type AttendanceMap = Record<string, AttendanceStatus>
 type NotesMap = Record<string, string>
@@ -23,14 +24,17 @@ export function AttendanceSheet({
   classes,
   teacherId,
   schoolId,
+  defaultClassId,
 }: {
   classes: Pick<Class, 'id' | 'name' | 'grade'>[]
   teacherId: string
   schoolId: string
+  defaultClassId?: string
 }) {
+  const router = useRouter()
   const today = new Date().toISOString().split('T')[0]
 
-  const [selectedClass, setSelectedClass] = useState<string>(classes[0]?.id ?? '')
+  const [selectedClass, setSelectedClass] = useState<string>(defaultClassId ?? classes[0]?.id ?? '')
   const [selectedDate, setSelectedDate] = useState<string>(today)
   const [learners, setLearners] = useState<Learner[]>([])
   const [attendance, setAttendance] = useState<AttendanceMap>({})
@@ -211,6 +215,13 @@ export function AttendanceSheet({
                           >
                             <MessageSquare className="w-3.5 h-3.5" />
                           </button>
+                          <button
+                            onClick={() => router.push(`/black-book/new?learner_id=${learner.id}&class_id=${selectedClass}`)}
+                            className="p-1.5 rounded text-gray-300 hover:text-red-500 hover:bg-red-50 transition-colors"
+                            title="Log incident"
+                          >
+                            <Flag className="w-3.5 h-3.5" />
+                          </button>
                           {STATUS_OPTIONS.map((opt) => (
                             <button
                               key={opt.value}
@@ -246,6 +257,13 @@ export function AttendanceSheet({
                   {saveError && (
                     <p className="text-sm text-red-600 mr-auto">{saveError}</p>
                   )}
+                  <a
+                    href={`/api/export/attendance?class_id=${selectedClass}&from=${selectedDate}&to=${selectedDate}`}
+                    download
+                    className="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium rounded-md border border-gray-200 text-gray-700 hover:bg-gray-50 transition-colors"
+                  >
+                    <Download className="w-4 h-4" /> Export
+                  </a>
                   <Button onClick={handleSave} disabled={saving} className="gap-2">
                     <Save className="w-4 h-4" />
                     {saving ? 'Saving…' : 'Save register'}

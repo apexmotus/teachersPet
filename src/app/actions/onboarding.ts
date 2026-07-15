@@ -12,7 +12,7 @@ export type OnboardingPayload = {
   idNumber: string
   role: Role
   // School
-  schoolAction: 'join' | 'create'
+  schoolAction: 'join' | 'create' | 'skip'
   joinCode?: string
   schoolName?: string
   schoolAddress?: string
@@ -31,6 +31,30 @@ export async function completeOnboarding(payload: OnboardingPayload): Promise<On
 
   // All writes go through the admin client so RLS is not a blocker
   const admin = createAdminClient()
+
+  // Invited users already have a school — skip school assignment
+  if (payload.schoolAction === 'skip') {
+    const { data: existingProfile } = await admin
+      .from('profiles')
+      .select('school_id, role')
+      .eq('id', user.id)
+      .single()
+    if (!existingProfile?.school_id) {
+      return { ok: false, error: 'No school assigned. Please contact your school administrator.' }
+    }
+    const { error: profileErr } = await admin
+      .from('profiles')
+      .update({
+        name: payload.name,
+        surname: payload.surname,
+        phone: payload.phone || null,
+        id_number: payload.idNumber || null,
+        onboarding_complete: true,
+      })
+      .eq('id', user.id)
+    if (profileErr) return { ok: false, error: profileErr.message }
+    return { ok: true, joinCode: '' }
+  }
 
   let schoolId: string
   let joinCode: string
