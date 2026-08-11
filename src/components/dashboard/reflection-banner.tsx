@@ -10,16 +10,14 @@ import type { Reflection } from '@/lib/types/database'
 interface ReflectionBannerProps {
   todayReflection: Pick<Reflection, 'id' | 'notes'> | null
   date: string
+  showPrompt: boolean
 }
 
-export function ReflectionBanner({ todayReflection, date }: ReflectionBannerProps) {
+export function ReflectionBanner({ todayReflection, date, showPrompt }: ReflectionBannerProps) {
   const [saved, setSaved] = useState(todayReflection !== null)
   const [notes, setNotes] = useState('')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
-
-  // Time check is client-side — server renders once, banner appears dynamically
-  const showPrompt = !saved && typeof window !== 'undefined' && new Date().getHours() >= 13
 
   if (saved) {
     return (

@@ -18,6 +18,34 @@ const ROLE_LABELS: Record<string, string> = {
 }
 
 const LEADERSHIP = ['dh', 'dp', 'principal']
+const SOUTH_AFRICA_TIME_ZONE = 'Africa/Johannesburg'
+
+function getSouthAfricanDate(date: Date) {
+  const parts = new Intl.DateTimeFormat('en-GB', {
+    timeZone: SOUTH_AFRICA_TIME_ZONE,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(date)
+  const values = Object.fromEntries(parts.map(({ type, value }) => [type, value]))
+  return `${values.year}-${values.month}-${values.day}`
+}
+
+function getSouthAfricanDayOfWeek(date: Date) {
+  const weekday = new Intl.DateTimeFormat('en-US', {
+    timeZone: SOUTH_AFRICA_TIME_ZONE,
+    weekday: 'short',
+  }).format(date)
+  return { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 }[weekday] ?? 0
+}
+
+function getSouthAfricanHour(date: Date) {
+  return Number(new Intl.DateTimeFormat('en-GB', {
+    timeZone: SOUTH_AFRICA_TIME_ZONE,
+    hour: '2-digit',
+    hourCycle: 'h23',
+  }).format(date))
+}
 
 type SlotRow = TimetableSlot & {
   classes: { name: string; grade: number } | null
@@ -38,9 +66,9 @@ export default async function DashboardPage() {
   const schoolId = profile.school_id
 
   const isLeadership = LEADERSHIP.includes(profile.role)
-  const todayStr = new Date().toISOString().split('T')[0]
-  const todayJs = new Date()
-  const dowJs = todayJs.getDay() // 0=Sun, 6=Sat
+  const now = new Date()
+  const todayStr = getSouthAfricanDate(now)
+  const dowJs = getSouthAfricanDayOfWeek(now) // 0=Sun, 6=Sat
   const isWeekend = dowJs === 0 || dowJs === 6
   const todayDow = isWeekend ? null : dowJs // 1=Mon…5=Fri matches DB
 
@@ -153,7 +181,8 @@ export default async function DashboardPage() {
     classesWithNoRegister = (allClasses ?? []).filter((c) => !doneSet.has(c.id))
   }
 
-  const today = todayJs.toLocaleDateString('en-ZA', {
+  const today = now.toLocaleDateString('en-ZA', {
+    timeZone: SOUTH_AFRICA_TIME_ZONE,
     weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
   })
 
@@ -164,7 +193,8 @@ export default async function DashboardPage() {
     { href: '/lesson-plans',  label: 'Lesson Plans',     icon: BookOpen,      desc: 'Plan and prepare lessons' },
   ]
 
-  const showReflectionBanner = !isWeekend
+  const renderReflectionBanner = !isWeekend
+  const showReflectionPrompt = getSouthAfricanHour(now) >= 13
 
   return (
     <div className="p-6 max-w-5xl mx-auto space-y-6">
@@ -185,8 +215,12 @@ export default async function DashboardPage() {
       </div>
 
       {/* End-of-day reflection banner (all roles that teach) */}
-      {showReflectionBanner && (
-        <ReflectionBanner todayReflection={todayReflection} date={todayStr} />
+      {renderReflectionBanner && (
+        <ReflectionBanner
+          todayReflection={todayReflection}
+          date={todayStr}
+          showPrompt={showReflectionPrompt}
+        />
       )}
 
       {/* Role-specific dashboard section */}

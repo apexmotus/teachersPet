@@ -27,8 +27,9 @@ export async function proxy(request: NextRequest) {
 
   const path = request.nextUrl.pathname
   const isAuthRoute = path === '/login' || path === '/register'
+  const isAuthCallback = path === '/auth/callback'
   // / is the public landing page; robots.txt + sitemap.xml are generated routes
-  const isPublicRoute = isAuthRoute || path === '/' || path === '/robots.txt' || path === '/sitemap.xml'
+  const isPublicRoute = isAuthRoute || isAuthCallback || path === '/' || path === '/robots.txt' || path === '/sitemap.xml'
 
   if (!user && !isPublicRoute) {
     const url = request.nextUrl.clone()

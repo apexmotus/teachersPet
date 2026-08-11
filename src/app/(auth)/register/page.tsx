@@ -1,5 +1,10 @@
 import { RegisterForm } from '@/components/auth/register-form'
 
-export default function RegisterPage() {
-  return <RegisterForm />
+type RegisterPageProps = {
+  searchParams: Promise<{ confirmation?: string }>
+}
+
+export default async function RegisterPage({ searchParams }: RegisterPageProps) {
+  const { confirmation } = await searchParams
+  return <RegisterForm confirmationFailed={confirmation === 'failed'} />
 }

@@ -1,7 +1,6 @@
 'use client'
 
 import { useState } from 'react'
-import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 import { completeOnboarding } from '@/app/actions/onboarding'
@@ -20,13 +19,17 @@ const ROLES: { value: Role; label: string }[] = [
 type Step = 'account' | 'profile' | 'school'
 const STEPS: Step[] = ['account', 'profile', 'school']
 
-export function RegisterForm() {
-  const router = useRouter()
+export function RegisterForm({ confirmationFailed = false }: { confirmationFailed?: boolean }) {
   const [step, setStep]     = useState<Step>('account')
-  const [error, setError]   = useState<string | null>(null)
+  const [error, setError]   = useState<string | null>(
+    confirmationFailed
+      ? 'This confirmation link is invalid or has expired. Sign in if you have already confirmed your email, or register again for a new link.'
+      : null
+  )
   const [loading, setLoading] = useState(false)
+  const [confirmationEmail, setConfirmationEmail] = useState<string | null>(null)
 
-  // Step 1 — account credentials (collected but not submitted yet)
+  // Step 1 — account credentials
   const [email, setEmail]       = useState('')
   const [password, setPassword] = useState('')
 
@@ -46,10 +49,41 @@ export function RegisterForm() {
 
   const stepIndex = STEPS.indexOf(step)
 
-  // Steps 1 & 2 are pure UI — no Supabase calls, just advance the wizard
-  function handleAccountStep(e: React.FormEvent) {
+  // Create the account before collecting onboarding details. When email
+  // confirmation is enabled, Supabase intentionally returns no session here.
+  async function handleAccountStep(e: React.FormEvent) {
     e.preventDefault()
     setError(null)
+    setLoading(true)
+
+    const supabase = createClient()
+    const { data, error: signUpError } = await supabase.auth.signUp({
+      email,
+      password,
+      options: {
+        emailRedirectTo: `${window.location.origin}/auth/callback?next=/onboarding`,
+      },
+    })
+
+    if (signUpError) {
+      setError(signUpError.message)
+      setLoading(false)
+      return
+    }
+
+    if (!data.user) {
+      setError('We could not create your account. Please try again.')
+      setLoading(false)
+      return
+    }
+
+    if (!data.session) {
+      setConfirmationEmail(email)
+      setLoading(false)
+      return
+    }
+
+    setLoading(false)
     setStep('profile')
   }
 
@@ -59,23 +93,11 @@ export function RegisterForm() {
     setStep('school')
   }
 
-  // Step 3: signUp first, then hand off to the server action for school + profile
+  // Step 3: finish profile and school setup for an authenticated user.
   async function handleSchoolStep(e: React.FormEvent) {
     e.preventDefault()
     setError(null)
     setLoading(true)
-
-    const supabase = createClient()
-
-    // Sign up — requires "Confirm email" OFF in Supabase Auth settings
-    const { data: authData, error: signUpError } = await supabase.auth.signUp({ email, password })
-    if (signUpError) { setError(signUpError.message); setLoading(false); return }
-
-    if (!authData.user) {
-      setError('Account created but no session returned. Make sure "Confirm email" is disabled in your Supabase Auth settings.')
-      setLoading(false)
-      return
-    }
 
     // School creation + profile update run server-side (bypasses RLS via admin client)
     const result = await completeOnboarding({
@@ -94,6 +116,26 @@ export function RegisterForm() {
     }
 
     window.location.href = '/dashboard'
+  }
+
+  if (confirmationEmail) {
+    return (
+      <div className="space-y-5">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">Confirm your email</h1>
+          <p className="text-sm text-gray-500 mt-1">
+            We&apos;ve sent a confirmation link to {confirmationEmail}.
+          </p>
+        </div>
+        <div className="rounded-lg bg-blue-50 border border-blue-200 px-4 py-3 text-sm text-blue-800">
+          Open the link in that email to verify your account. You&apos;ll then return here to finish your profile and school setup.
+        </div>
+        <p className="text-center text-sm text-gray-500">
+          Already confirmed?{' '}
+          <Link href="/login" className="font-medium text-primary hover:underline">Sign in</Link>
+        </p>
+      </div>
+    )
   }
 
   return (
@@ -139,7 +181,9 @@ export function RegisterForm() {
               placeholder="At least 8 characters"
             />
           </div>
-          <Button type="submit" className="w-full">Continue</Button>
+          <Button type="submit" className="w-full" disabled={loading}>
+            {loading ? 'Creating account…' : 'Continue'}
+          </Button>
           <p className="text-center text-sm text-gray-500">
             Already have an account?{' '}
             <Link href="/login" className="font-medium text-primary hover:underline">Sign in</Link>
