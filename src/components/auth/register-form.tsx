@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
+import { siteUrlFor } from '@/lib/site-url'
 import { completeOnboarding } from '@/app/actions/onboarding'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -61,7 +62,7 @@ export function RegisterForm({ confirmationFailed = false }: { confirmationFaile
       email,
       password,
       options: {
-        emailRedirectTo: `${window.location.origin}/auth/callback?next=/onboarding`,
+        emailRedirectTo: siteUrlFor('/auth/callback?next=/onboarding'),
       },
     })
 

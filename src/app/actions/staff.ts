@@ -2,6 +2,7 @@
 
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { siteUrlFor } from '@/lib/site-url'
 import { revalidatePath } from 'next/cache'
 
 type Role = 'teacher' | 'dh' | 'dp' | 'principal'
@@ -55,6 +56,7 @@ export async function inviteStaffMember(payload: { email: string; role: Role }):
   // Send invite email via admin client
   const admin = createAdminClient()
   const { error: inviteError } = await admin.auth.admin.inviteUserByEmail(payload.email, {
+    redirectTo: siteUrlFor('/auth/callback?next=/onboarding'),
     data: {
       school_id: ctx.profile.school_id,
       role: payload.role,
@@ -90,6 +92,7 @@ export async function resendInvitation(id: string): Promise<Result> {
 
   const admin = createAdminClient()
   const { error } = await admin.auth.admin.inviteUserByEmail(inv.email, {
+    redirectTo: siteUrlFor('/auth/callback?next=/onboarding'),
     data: { school_id: inv.school_id, role: inv.role },
   })
 
